@@ -38,8 +38,8 @@ type Journal struct
     Name string `json:"name"`
     CPR string `json:"cpr_nr"`
     Status string `json:"status"`
-    State int64 `json:"state"`
-    Timestamp int64 `json:"timestamp"`
+    State string `json:"state"`
+    Timestamp string `json:"timestamp"`
 }
 
 // ============================================================================================================================
@@ -211,10 +211,8 @@ func (t *SimpleChaincode) Init_journal(stub *shim.ChaincodeStub, args []string) 
     name := args[0]
     cpr := args[1]
     status := args[2]
-    state, err := strconv.Atoi(args[3])
-    if err != nil { return nil, errors.New("3rd argument must be a numeric string") }
-    timestamp, err := strconv.Atoi(args[4])
-    if err != nil { return nil, errors.New("4rd argument must be a numeric string") }
+    state := args[3]
+    timestamp := args[4]
 
     //check if cpr-nr already exists
     journalAsBytes, err := stub.GetState(cpr)
