@@ -230,7 +230,7 @@ func (t *SimpleChaincode) Init_journal(stub *shim.ChaincodeStub, args []string) 
     }
     
     //build the journal json string manually
-    strJson := `{"name": "` + name + `", "cpr_nr": "` + cpr +  `", "status": ` + status +  `, "state": "` + strconv.Itoa(state) + `, "timestamp": "` + strconv.Itoa(timestamp) + `"}`
+    strJson := `{"name": "` + name + `", "cpr_nr": "` + cpr +  `", "status": ` + status +  `, "state": "` + state + `, "timestamp": "` + timestamp + `"}`
     
     //store journal with cpr as key
     err = stub.PutState(cpr, []byte(strJson))                                  
@@ -238,7 +238,7 @@ func (t *SimpleChaincode) Init_journal(stub *shim.ChaincodeStub, args []string) 
         
     //get the journal index
     journalsAsBytes, err := stub.GetState(journalIndexStr)
-    if err != nil { return nil, errors.New("Failed to get marble index") }
+    if err != nil { return nil, errors.New("Failed to get journal index") }
     
     var journalIndex []string
     //un stringify it aka JSON.parse()
