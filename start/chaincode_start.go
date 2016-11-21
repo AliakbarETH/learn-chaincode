@@ -74,13 +74,8 @@ func (t *SimpleChaincode) Init(stub *shim.ChaincodeStub, function string, args [
         return nil, errors.New("Expecting integer value for asset holding")
     }
 
-    /*err := stub.PutState("hello_world", []byte(args[0]))
-    if err != nil {
-        return nil, err
-    }*/
-
     // Write the state to the ledger
-    err = stub.PutState("abc", []byte(strconv.Itoa(Aval))) //making a test var "abc", I find it handy to read/write to it right away to test the network
+    err = stub.PutState("abc", []byte(strconv.Itoa(Aval))) //making a test var "abc"
     if err != nil {
         return nil, err
     }
@@ -191,7 +186,7 @@ func (t *SimpleChaincode) Init_journal(stub *shim.ChaincodeStub, args []string) 
     */
     
     if len(args) != 5 {
-        return nil, errors.New("Incorrect number of arguments. Expecting 4")
+        return nil, errors.New("Incorrect number of arguments. Expecting 5")
     }
 
     // Input sanitation
@@ -237,11 +232,7 @@ func (t *SimpleChaincode) Init_journal(stub *shim.ChaincodeStub, args []string) 
     }
     
     //build the journal json string manually
-    strJson := `{"name": "` + name +
-     `", "cpr_nr": "` + cpr + 
-     `", "status": ` + status + 
-     `, "state": "` + strconv.Itoa(state) +
-     `, "timestamp": "` + strconv.Itoa(timestamp) + `"}`
+    strJson := `{"name": "` + name + `", "cpr_nr": "` + cpr +  `", "status": ` + status +  `, "state": "` + strconv.Itoa(state) + `, "timestamp": "` + strconv.Itoa(timestamp) + `"}`
     
     //store journal with cpr as key
     err = stub.PutState(cpr, []byte(strJson))                                  
