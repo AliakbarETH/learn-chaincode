@@ -19,99 +19,255 @@ package main
 import (
 	"errors"
 	"fmt"
-
+    "strings"
+    "strconv"
+    "encoding/json"
+    "time"
+    "runtime"
 	"github.com/hyperledger/fabric/core/chaincode/shim"
 )
 
 // SimpleChaincode example simple Chaincode implementation
 type SimpleChaincode struct {
+
+}
+
+//name for the key/value that will store a list of all known journals
+var journalIndexStr = "_journalindex" 
+
+type Journal struct
+{
+    Name string `json:"name"`
+    CPR string `json:"cpr_nr"`
+    Status string `json:"status"`
+    State int64 `json:"state"`
+    Timestamp int64 `json:"timestamp"`
 }
 
 // ============================================================================================================================
 // Main
 // ============================================================================================================================
 func main() {
+
+    // maximize CPU usage for maximum performance
+    runtime.GOMAXPROCS(runtime.NumCPU())
+
 	err := shim.Start(new(SimpleChaincode))
 	if err != nil {
 		fmt.Printf("Error starting Simple chaincode: %s", err)
 	}
 }
 
+// ============================================================================================================================
+// Init - Reset all things
+// ============================================================================================================================
 func (t *SimpleChaincode) Init(stub *shim.ChaincodeStub, function string, args []string) ([]byte, error) {
+    
+    var Aval int
+    var err error
+
     if len(args) != 1 {
-    return nil, errors.New("Incorrect number of arguments. Expecting 1")
+        return nil, errors.New("Incorrect number of arguments. Expecting 1")
     }
 
-    err := stub.PutState("hello_world", []byte(args[0]))
+    // Initialize the chaincode
+    Aval, err = strconv.Atoi(args[0])
     if err != nil {
-    return nil, err
+        return nil, errors.New("Expecting integer value for asset holding")
+    }
+
+    /*err := stub.PutState("hello_world", []byte(args[0]))
+    if err != nil {
+        return nil, err
+    }*/
+
+    // Write the state to the ledger
+    err = stub.PutState("abc", []byte(strconv.Itoa(Aval))) //making a test var "abc", I find it handy to read/write to it right away to test the network
+    if err != nil {
+        return nil, err
+    }
+
+    var empty []string
+    jsonAsBytes, _ := json.Marshal(empty) //marshal an emtpy array of strings to clear the index
+    err = stub.PutState(journalIndexStr, jsonAsBytes)
+    if err != nil {
+        return nil, err
     }
 
     return nil, nil
 }
 
-// Invoke is our entry point to invoke a chaincode function
+// ============================================================================================================================
+// Invoke - Our entry point to invoke a chaincode function
+// ============================================================================================================================
 func (t *SimpleChaincode) Invoke(stub *shim.ChaincodeStub, function string, args []string) ([]byte, error) {
     fmt.Println("invoke is running " + function)
 
     // Handle different functions
     if function == "init" {
-    return t.Init(stub, "init", args)
+        return t.Init(stub, "init", args)
     } else if function == "write" {
-    return t.write(stub, args)
+        return t.Write(stub, args)
+    } else if function == "init_journal" {   
+        //create a new journal                              
+        return t.Init_journal(stub, args)
     }
+    
     fmt.Println("invoke did not find func: " + function)
 
     return nil, errors.New("Received unknown function invocation")
 }
 
-// Query is our entry point for queries
+// ============================================================================================================================
+// Query - Our entry point for queries
+// ============================================================================================================================
 func (t *SimpleChaincode) Query(stub *shim.ChaincodeStub, function string, args []string) ([]byte, error) {
     fmt.Println("query is running " + function)
 
     // Handle different functions
     if function == "read" {                            //read a variable
-    return t.read(stub, args)
+        return t.Read(stub, args)
     }
+    
     fmt.Println("query did not find func: " + function)
 
     return nil, errors.New("Received unknown function query")
 }
 
-// Write
-func (t *SimpleChaincode) write(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
-    var name, value string
+// ============================================================================================================================
+// Write - write variable into chaincode state
+// ============================================================================================================================
+func (t *SimpleChaincode) Write(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
+    var cpr, value string
     var err error
     fmt.Println("running write()")
 
     if len(args) != 2 {
-    return nil, errors.New("Incorrect number of arguments. Expecting 2. name of the variable and value to set")
+        return nil, errors.New("Incorrect number of arguments. Expecting 2. name of the variable and value to set")
     }
 
-    name = args[0]                            //rename for fun
+    cpr = args[0]                            //rename for fun
     value = args[1]
-    err = stub.PutState(name, []byte(value))  //write the variable into the chaincode state
-    if err != nil {
-    return nil, err
-    }
+    err = stub.PutState(cpr, []byte(value))  //write the variable into the chaincode state
+    if err != nil { return nil, err }
+
     return nil, nil
 }
 
-// Read
-func (t *SimpleChaincode) read(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
-    var name, jsonResp string
+// ============================================================================================================================
+// Read - read a variable from chaincode state
+// ============================================================================================================================
+func (t *SimpleChaincode) Read(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
+    var cpr, jsonResp string
     var err error
 
     if len(args) != 1 {
     return nil, errors.New("Incorrect number of arguments. Expecting name of the var to query")
     }
 
-    name = args[0]
-    valAsbytes, err := stub.GetState(name)
+    cpr = args[0]
+    valAsbytes, err := stub.GetState(cpr)
     if err != nil {
-    jsonResp = "{\"Error\":\"Failed to get state for " + name + "\"}"
-    return nil, errors.New(jsonResp)
+        jsonResp = "{\"Error\":\"Failed to get state for " + cpr + "\"}"
+        return nil, errors.New(jsonResp)
     }
 
     return valAsbytes, nil
 }
+
+
+// ============================================================================================================================
+// Init Journal - create a new journal, store into chaincode state
+// ============================================================================================================================
+func (t *SimpleChaincode) Init_journal(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
+    var err error
+
+    /* 
+    Our model looks like
+    -------------------------------------------------------
+    Name string, CPR string, Status string, State int64 , Timestamp int64
+    -------------------------------------------------------
+       0        1        2         3          4
+    "name", "cpr-nr", "status", "state", "timestamp"
+    -------------------------------------------------------
+    */
+    
+    if len(args) != 5 {
+        return nil, errors.New("Incorrect number of arguments. Expecting 4")
+    }
+
+    // Input sanitation
+    fmt.Println("- start init journal")
+    if len(args[0]) <= 0 {
+        return nil, errors.New("1st argument must be a non-empty string")
+    }
+    if len(args[1]) <= 0 {
+        return nil, errors.New("2nd argument must be a non-empty string")
+    }
+    if len(args[2]) <= 0 {
+        return nil, errors.New("3rd argument must be a non-empty string")
+    }
+    if len(args[3]) <= 0 {
+        return nil, errors.New("4rd argument must be a non-empty string")
+    }
+    if len(args[4]) <= 0 {
+        return nil, errors.New("5th argument must be a non-empty string")
+    }
+
+    // Retrive values
+    name := args[0]
+    cpr := args[1]
+    status := args[2]
+    state, err := strconv.Atoi(args[3])
+    if err != nil { return nil, errors.New("3rd argument must be a numeric string") }
+    timestamp, err := strconv.Atoi(args[4])
+    if err != nil { return nil, errors.New("4rd argument must be a numeric string") }
+
+    //check if cpr-nr already exists
+    journalAsBytes, err := stub.GetState(cpr)
+    if err != nil {
+        return nil, errors.New("Failed to get cpr-nr")
+    }
+    
+    res := Journal{}
+    json.Unmarshal(journalAsBytes, &res)
+    if res.CPR == cpr{
+        fmt.Println("This cpr-nr arleady exists: " + cpr)
+        fmt.Println(res);
+        //all stop a journal if this cpr-nr exists
+        return nil, errors.New("This cpr-nr arleady exists")                
+    }
+    
+    //build the journal json string manually
+    strJson := `{"name": "` + name +
+     `", "cpr_nr": "` + cpr + 
+     `", "status": ` + status + 
+     `, "state": "` + strconv.Itoa(state) +
+     `, "timestamp": "` + strconv.Itoa(timestamp) + `"}`
+    
+    //store journal with cpr as key
+    err = stub.PutState(cpr, []byte(strJson))                                  
+    if err != nil { return nil, err }
+        
+    //get the journal index
+    journalsAsBytes, err := stub.GetState(journalIndexStr)
+    if err != nil { return nil, errors.New("Failed to get marble index") }
+    
+    var journalIndex []string
+    //un stringify it aka JSON.parse()
+    json.Unmarshal(journalsAsBytes, &journalIndex)                            
+    
+    //append - add journal cpr-nr to index list
+    journalIndex = append(journalIndex, cpr)                                 
+    fmt.Println("! journal index: ", journalIndex)
+
+    //store cpr-nr of journal
+    jsonAsBytes, _ := json.Marshal(journalIndex)
+    err = stub.PutState(journalIndexStr, jsonAsBytes)                        
+
+    fmt.Println("- end init journal")
+    return nil, nil
+}
+
+
+
